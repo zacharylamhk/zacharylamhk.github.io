@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2024 的士新收費換算</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #output {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        #output2 {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 200px;
+            margin: 20px 0;
+        }
+        .keypad button {
+            padding: 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+    </style>
+</head>
+<body>
+    <h1>紅的新收費換算</h1>
+    <input type="text" id="inputBox" placeholder="Enter a key" readonly>
+    <div id="output"></div>
+    <div id="output2"></div>
+    <div class="keypad">
+        <button onclick="appendKey('1')">1</button>
+        <button onclick="appendKey('2')">2</button>
+        <button onclick="appendKey('3')">3</button>
+        <button onclick="appendKey('4')">4</button>
+        <button onclick="appendKey('5')">5</button>
+        <button onclick="appendKey('6')">6</button>
+        <button onclick="appendKey('7')">7</button>
+        <button onclick="appendKey('8')">8</button>
+        <button onclick="appendKey('9')">9</button>
+        <button onclick="appendKey('0')">0</button>
+        <button onclick="appendKey('.')">.</button>
+        <button onclick="clearInput()">C</button>
+    </div>
+    
+
+    <script>
+        const url = './redtaxi.json'; // Replace with the actual URL of your JSON file
+
+        let jsonData = {};
+
+        // Fetch the JSON data from the URL
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                jsonData = data;
+            })
+            .catch(error => console.error('Error fetching the JSON data:', error));
+
+        // Function to append key to the input box
+        function appendKey(key) {
+            const inputBox = document.getElementById('inputBox');
+            inputBox.value += key;
+            updateOutput();
+            updateOutput2();
+
+        }
+        function roundToOne(number) {
+            return +(Math.round(number + "e+1") + "e-1");
+        }
+        // Function to clear the input box
+        function clearInput() {
+            const inputBox = document.getElementById('inputBox');
+            inputBox.value = '';
+            updateOutput();
+            updateOutput2();
+            const outputDiv2 = document.getElementById('output2');
+            outputDiv2.textContent = `公司價 :         `;
+            x=0
+        }
+
+        // Function to update the output based on the input box value
+        function updateOutput() {
+            const inputBox = document.getElementById('inputBox');
+            const key = inputBox.value;
+            const outputDiv = document.getElementById('output');
+
+            if (jsonData[key] !== undefined) {
+                outputDiv.textContent = `新收費 :         $ ${jsonData[key]}`;
+                x= parseFloat(jsonData[key])
+            } else if (jsonData[key + '.0'] !== undefined) {
+                outputDiv.textContent = `新收費 : $ ${jsonData[key + '.0']}`;
+                x= parseFloat(jsonData[key+ '.0'])
+            } else {
+                outputDiv.textContent = '沒有記錄';
+            }
+        }
+        function updateOutput2() {
+            const inputBox = document.getElementById('inputBox');
+            const key = inputBox.value;
+            const outputDiv2 = document.getElementById('output2');
+            
+            try {
+            // Do something that might trigger an error
+                console.log(x)
+                if (x <= 70){
+                    outputDiv2.textContent = `公司價 :         $ ${x}`;
+                }else if (x > 70 && x <82) {
+                    outputDiv2.textContent = `公司價 :         $ 70`;
+                } else {
+                    outputDiv2.textContent = `公司價 :         $ ${roundToOne(x*0.85)}`;
+                }
+            } catch (error) {
+ 
+                outputDiv2.textContent = `公司價 :         $ --`;
+            }
+
+
+
+        }
+    </script>
+</body>
+</html>
