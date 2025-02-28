@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Joystick Controller</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        #controller-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 150px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            touch-action: manipulation;
+        }
+
+        #joystick-container {
+            position: relative;
+            width: 128px;
+            height: 128px;
+            margin-left: 10%;
+            touch-action: manipulation;
+        }
+
+        #joystick-container img {
+            user-select: none;
+            -webkit-user-drag: none;
+            touch-action: manipulation;
+        }
+
+        #stick {
+            position: absolute;
+            left: 32px;
+            top: 32px;
+            transition: transform 0.2s;
+            touch-action: manipulation;
+        }
+
+        #buttons-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10%;
+            width: 128px;
+            height: 128px;
+            touch-action: manipulation;
+        }
+
+        #buttons-container img {
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            border-radius: 50%;
+            object-fit: cover;
+            touch-action: manipulation;
+        }
+
+        #latency-display {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #visitor-id-display {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        /* New styles for broadcast message */
+        #broadcast-message {
+            position: fixed;
+            bottom: 160px; /* Above the controller container (150px height + 10px gap) */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+            max-width: 80%;
+            word-wrap: break-word;
+            z-index: 1000; /* Ensure it appears above other elements */
+        }
+    </style>
+</head>
+<body>
+    <div id="latency-display">Latency: 0ms</div>
+    <div id="visitor-id-display">Visitor ID: <span id="visitor-id"></span></div>
+
+    <!-- New div for broadcast messages -->
+    <div id="broadcast-message"></div>
+
+    <div id="controller-container">
+        <div id="joystick-container">
+            <img src="{{ url_for('static', filename='images/joystick-base.png') }}" alt="Joystick Base"/>
+            <div id="stick">
+                <img src="{{ url_for('static', filename='images/joystick-red.png') }}" alt="Joystick Stick"/>
+            </div>
+        </div>
+
+        <div id="buttons-container">
+            <img src="{{ url_for('static', filename='images/circle.png') }}" alt="Circle Button" onclick="sendCommand('circle')"/>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.min.js"></script>
+    <script>
+        function generateNumericFingerprint() {
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            canvas.width = 200;
+            canvas.height = 200;
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#f00';
+            ctx.fillText('Unique Fingerprint', 50, 50);
+            var base64Data = canvas.toDataURL().split(',')[1];
+            var hash = CryptoJS.SHA1(base64Data).toString();
+            var numericHash = hash.replace(/\D/g, '');
+            return numericHash.substring(0, 20).padEnd(20, '0');
+        }
+        const visitorId = generateNumericFingerprint();
+
+        document.getElementById('visitor-id').textContent = visitorId;
+
+        const ws = new WebSocket("wss://ws02.joinyou.online/control");
+
+        let latency = 0;
+        let lastSentTime = 0;
+
+        ws.onopen = () => {
+            console.log("WebSocket connection established.");
+            const initialMessage = JSON.stringify({
+                visitorId: visitorId,
+                command: "new",
+                direction: { x: 0, y: 0 }
+            });
+            lastSentTime = Date.now();
+            ws.send(initialMessage);
+            console.log("Sent initial message:", initialMessage);
+        };
+
+        ws.onmessage = (event) => {
+            const currentTime = Date.now();
+            latency = currentTime - lastSentTime;
+            document.getElementById('latency-display').textContent = `Latency: ${latency}ms`;
+
+            try {
+                const message = JSON.parse(event.data);
+                console.log("Received broadcast message:", message);
+                
+                // Update broadcast message display
+                const messageDiv = document.getElementById('broadcast-message');
+                messageDiv.textContent = `${message.command}: ${message.value}`;
+                
+                // Fade in and out effect
+                messageDiv.style.opacity = '0';
+                messageDiv.style.transition = 'opacity 0.5s';
+                setTimeout(() => {
+                    messageDiv.style.opacity = '1';
+                }, 10);
+                setTimeout(() => {
+                    messageDiv.style.opacity = '0';
+                }, 5000);
+            } catch (error) {
+                console.error("Error parsing broadcast message:", error);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+
+        ws.onclose = () => {
+            console.log("WebSocket connection closed.");
+        };
+
+        class JoystickController {
+            constructor(stickID, maxDistance, deadzone) {
+                this.id = stickID;
+                this.stick = document.getElementById(stickID);
+                this.dragStart = null;
+                this.touchId = null;
+                this.active = false;
+                this.value = { x: 0, y: 0 };
+                this.maxDistance = maxDistance;
+                this.deadzone = deadzone;
+
+                const self = this;
+
+                function handleDown(event) {
+                    self.active = true;
+                    self.stick.style.transition = '0s';
+                    event.preventDefault();
+                    if (event.changedTouches) {
+                        self.dragStart = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
+                        self.touchId = event.changedTouches[0].identifier;
+                    } else {
+                        self.dragStart = { x: event.clientX, y: event.clientY };
+                    }
+                }
+
+                function handleMove(event) {
+                    if (!self.active) return;
+                    let clientX, clientY;
+                    if (event.changedTouches) {
+                        for (let i = 0; i < event.changedTouches.length; i++) {
+                            if (self.touchId === event.changedTouches[i].identifier) {
+                                clientX = event.changedTouches[i].clientX;
+                                clientY = event.changedTouches[i].clientY;
+                                break;
+                            }
+                        }
+                        if (clientX === undefined) return;
+                    } else {
+                        clientX = event.clientX;
+                        clientY = event.clientY;
+                    }
+
+                    const xDiff = clientX - self.dragStart.x;
+                    const yDiff = clientY - self.dragStart.y;
+                    const angle = Math.atan2(yDiff, xDiff);
+                    const distance = Math.min(self.maxDistance, Math.hypot(xDiff, yDiff));
+                    const xPosition = distance * Math.cos(angle);
+                    const yPosition = distance * Math.sin(angle);
+
+                    self.stick.style.transform = `translate3d(${xPosition}px, ${yPosition}px, 0px)`;
+
+                    const distance2 = distance < self.deadzone ? 0 : self.maxDistance / (self.maxDistance - self.deadzone) * (distance - self.deadzone);
+                    const xPosition2 = distance2 * Math.cos(angle);
+                    const yPosition2 = distance2 * Math.sin(angle);
+                    const xPercent = parseFloat((xPosition2 / self.maxDistance).toFixed(4));
+                    const yPercent = parseFloat((yPosition2 / self.maxDistance).toFixed(4));
+
+                    self.value = { x: xPercent, y: -yPercent };
+                    sendJoystickCommand(self.value);
+                }
+
+                function handleUp(event) {
+                    if (!self.active) return;
+                    if (event.changedTouches && self.touchId !== event.changedTouches[0].identifier) return;
+                    self.stick.style.transition = '.2s';
+                    self.stick.style.transform = `translate3d(0px, 0px, 0px)`;
+                    self.value = { x: 0, y: 0 };
+                    self.touchId = null;
+                    self.active = false;
+                    sendJoystickCommand(self.value);
+                }
+
+                this.stick.addEventListener('mousedown', handleDown);
+                this.stick.addEventListener('touchstart', handleDown);
+                document.addEventListener('mousemove', handleMove, { passive: false });
+                document.addEventListener('touchmove', handleMove, { passive: false });
+                document.addEventListener('mouseup', handleUp);
+                document.addEventListener('touchend', handleUp);
+            }
+        }
+
+        const myStick = new JoystickController("stick", 64, 8);
+
+        function sendJoystickCommand(value) {
+            const message = JSON.stringify({ visitorId: visitorId, command: "move", direction: value });
+            lastSentTime = Date.now();
+            ws.send(message);
+            console.log("Sent:", message);
+        }
+
+        function sendCommand(command) {
+            const message = JSON.stringify({ visitorId: visitorId, command: command, direction: { x: 0, y: 0 } });
+            lastSentTime = Date.now();
+            ws.send(message);
+            console.log("Sent:", message);
+        }
+    </script>
+</body>
+</html>
